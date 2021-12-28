@@ -5,7 +5,10 @@ use audioviz::audio_capture::{config::Config as CaptureConfig, capture::Capture}
 use audioviz::spectrum::stream::{Stream, StreamController};
 use audioviz::spectrum::config::{StreamConfig, ProcessorConfig};
 
-use std::{thread::sleep, time::Duration};
+use simple_logger::SimpleLogger;
+use log::{info, trace, warn, error};
+
+use std::{thread::sleep, time::Duration, process::exit};
 
 enum TcpInstruction {
     Invalid,
@@ -25,13 +28,44 @@ impl TcpInstruction {
 }
 
 fn main() {
+    SimpleLogger::new().init().unwrap();
+
     let ip = input("ip: ");
-    let mut stream = TcpStream::connect(ip).unwrap();
-    println!("connected");
+    let mut stream = match TcpStream::connect(ip.clone()) {
+        Ok(s) => {
+            info!( "connected to: {}", ip );
+            s
+        },
+        Err(e) => {
+            error!( "could not connect to {}: {}", ip, e );
+            exit(1);
+        }
+    };
+
+    let devices = match Capture::fetch_devices() {
+        Ok(d) => d,
+        Err(e) => {
+            error!("failed to fetch devices: {:#?}", e);
+            exit(1);
+        }
+    };
+    for (index, dev) in devices.iter().enumerate() {
+        println!("{}: {}", index, dev);
+    }
 
     // captures audio from system using cpal
-    let capture = Capture::init(CaptureConfig::default())
-    .unwrap();
+    let capture = match Capture::init(CaptureConfig::default()) {
+        Ok(c) => {
+            info!("capturing audio");
+            c
+        },
+        Err(e) => {
+            println!("failed to caputure audio: {:#?}", e); // log would create panic
+            exit(1);
+        }
+    };
+    
+    
  
     // continuous processing of data received from capture
     let audio = Stream::init_with_capture(&capture, StreamConfig {
@@ -86,22 +120,6 @@ fn input(print: &str) -> String {
 }
 
 fn vec_to_buffers(vec: &[u8]) -> Vec<Vec<u8>> {
-    /*
-    if vec.len() <= 15 {
-        let mut b: Vec<u8> = vec![0; 16];
-        for i in 0..vec.len() {
-            b[i + 1] = vec[i];
-        }
-        b[0] = vec.len() as u8;
-
-        vec![b]
-    } else {
-        for chunk in vec.chunks(15) {
-
-        }
-    }
-    */
-
     let mut chunk_buffer: Vec<Vec<u8>> = Vec::new();
     for chunk in vec.chunks(15) {
         let mut b: Vec<u8> = vec![0; 16];

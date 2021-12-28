@@ -2,7 +2,8 @@
 
 IP=raspberrypi
 TARGET=armv7-unknown-linux-gnueabihf
-PASSWD=3260Auto
+
+read -sp 'Password: ' PASSWD
 
 cargo build --release --target $TARGET
 
