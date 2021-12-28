@@ -55,9 +55,6 @@ fn main() {
         }
     };
 
-
-    sleep(Duration::from_millis(100));
-
     // getting audio capture
     println!("");
     '_capture_selection: loop {
@@ -97,7 +94,7 @@ fn main() {
                     let freqs = audio_controller.get_frequencies();
                     let mut data: Vec<u8> = Vec::new();
                     for freq in freqs {
-                        data.insert(0, (freq.volume.sqrt() * 4.0) as u8)
+                        data.insert(0, freq.volume as u8)
                     }
             
             
