@@ -8,7 +8,7 @@ read -sp 'Password: ' PASSWD
 cargo build --release --target $TARGET
 
 # upload binary
-sshpass -p $PASSWD scp -r ./target/$TARGET/release/rpi_led_matrix pi@$IP:/home/pi
+sshpass -p $PASSWD scp -r ./target/$TARGET/release/server pi@$IP:/home/pi
 
 # execute binary
-sshpass -p $PASSWD ssh pi@$IP 'echo running && ./rpi_led_matrix'
+sshpass -p $PASSWD ssh -t pi@$IP './server'; 'killall server'
