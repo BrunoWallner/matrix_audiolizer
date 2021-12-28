@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub struct Grid {
     // how many 8x8 displays not pixels
     pub width: usize,

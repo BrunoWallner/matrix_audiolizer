@@ -1,3 +1,6 @@
+#![allow(unreachable_code)]
+#![allow(dead_code)]
+
 use std::io::prelude::*;
 use std::net::TcpStream;
 
@@ -6,7 +9,7 @@ use audioviz::spectrum::stream::{Stream, StreamController};
 use audioviz::spectrum::config::{StreamConfig, ProcessorConfig};
 
 use simple_logger::SimpleLogger;
-use log::{info, trace, warn, error};
+use log::{info, error};
 use gag::Gag;
 
 use std::{thread::sleep, time::Duration, process::exit};
@@ -29,7 +32,7 @@ impl TcpInstruction {
 }
 
 fn main() {
-    let print_gag = Gag::stderr().unwrap(); // to get rid of alsa warnings
+    let _print_gag = Gag::stderr().unwrap(); // to get rid of alsa warnings
     SimpleLogger::new().init().unwrap();
 
     let ip = input("ip: ");
@@ -52,10 +55,12 @@ fn main() {
         }
     };
 
+
+    sleep(Duration::from_millis(100));
+
+    // getting audio capture
     println!("");
-    let mut capture: Option<Capture> = None;
-    let mut working_device: bool = false;
-    while(!working_device) {
+    '_capture_selection: loop {
         println!("Index\t| device name");
         println!("----------------------");
         for (index, dev) in devices.iter().enumerate() {
@@ -74,58 +79,57 @@ fn main() {
             device,
             ..Default::default()
         }) {
-            Ok(c) => {
+            Ok(capture) => {
                 println!("capturing audio"); // log would create panic
-                capture = Some(c);
-                working_device = true;
+                let audio = Stream::init_with_capture(&capture, StreamConfig {
+                    gravity: Some(200.0),
+                    processor: ProcessorConfig {
+                        frequency_bounds: [30, 15_000],
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                });
+                let audio_controller: StreamController = audio.get_controller();
+            
+                audio_controller.set_resolution(32);
+            
+                loop {
+                    let freqs = audio_controller.get_frequencies();
+                    let mut data: Vec<u8> = Vec::new();
+                    for freq in freqs {
+                        data.insert(0, (freq.volume.sqrt() * 4.0) as u8)
+                    }
+            
+            
+                    let data = vec_to_buffers(&data);
+            
+                    for d in data {
+                        // sends data to server
+                        let instruction = TcpInstruction::SendData;
+                        stream.write_all(&[instruction.to_byte()]).unwrap();
+                        stream.write_all(&d).unwrap();
+                    }
+            
+                    let instruction = TcpInstruction::SendComplete;
+                    stream.write_all(&[instruction.to_byte()]).unwrap();
+            
+                    sleep(Duration::from_millis(16));
+                }
+            
+                // unrachable but would be good to do
+                let instruction = TcpInstruction::CloseConnection;
+                stream.write(&[instruction.to_byte()]).unwrap();
             },
             Err(e) => {
-                error!("failed to caputure audio: {:#?}", e); // log would create panic
+                error!("failed to caputure audio: {:#?}\n", e); // log would create panic
             }
         };
-}
-
-    
-    
- 
-    // continuous processing of data received from capture
-    let audio = Stream::init_with_capture(&capture.unwrap(), StreamConfig {
-        gravity: Some(200.0),
-        processor: ProcessorConfig {
-            frequency_bounds: [30, 15_000],
-            ..Default::default()
-        },
-        ..Default::default()
-    });
-    let audio_controller: StreamController = audio.get_controller();
-
-    audio_controller.set_resolution(32);
-
-    loop {
-        let freqs = audio_controller.get_frequencies();
-        let mut data: Vec<u8> = Vec::new();
-        for freq in freqs {
-            data.insert(0, (freq.volume.sqrt() * 4.0) as u8)
-        }
-
-
-        let data = vec_to_buffers(&data);
-
-        for d in data {
-            // sends data to server
-            let instruction = TcpInstruction::SendData;
-            stream.write_all(&[instruction.to_byte()]).unwrap();
-            stream.write_all(&d).unwrap();
-        }
-
-        let instruction = TcpInstruction::SendComplete;
-        stream.write_all(&[instruction.to_byte()]).unwrap();
-
-        sleep(Duration::from_millis(16));
     }
 
-    let instruction = TcpInstruction::CloseConnection;
-    stream.write(&[instruction.to_byte()]).unwrap();
+    //let capture = Capture::init(CaptureConfig::default()).unwrap();
+
+    
+    // continuous processing of data received from capture
 }
 
 fn input(print: &str) -> String {
