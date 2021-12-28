@@ -10,3 +10,4 @@ audioviz = "0.4.4"
 
 simple_logger = "1.16.0"
 log = "0.4.14"
+gag = "1.0.0"

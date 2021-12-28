@@ -7,6 +7,7 @@ use audioviz::spectrum::config::{StreamConfig, ProcessorConfig};
 
 use simple_logger::SimpleLogger;
 use log::{info, trace, warn, error};
+use gag::Gag;
 
 use std::{thread::sleep, time::Duration, process::exit};
 
@@ -28,6 +29,7 @@ impl TcpInstruction {
 }
 
 fn main() {
+    let print_gag = Gag::stderr().unwrap(); // to get rid of alsa warnings
     SimpleLogger::new().init().unwrap();
 
     let ip = input("ip: ");
@@ -49,26 +51,45 @@ fn main() {
             exit(1);
         }
     };
-    for (index, dev) in devices.iter().enumerate() {
-        println!("{}: {}", index, dev);
-    }
 
-    // captures audio from system using cpal
-    let capture = match Capture::init(CaptureConfig::default()) {
-        Ok(c) => {
-            info!("capturing audio");
-            c
-        },
-        Err(e) => {
-            println!("failed to caputure audio: {:#?}", e); // log would create panic
-            exit(1);
+    println!("");
+    let mut capture: Option<Capture> = None;
+    let mut working_device: bool = false;
+    while(!working_device) {
+        println!("Index\t| device name");
+        println!("----------------------");
+        for (index, dev) in devices.iter().enumerate() {
+            println!("{}:\t {}", index, dev);
         }
-    };
+        let device = input("select device by index (empty for default): ")
+            .parse::<usize>();
+
+        println!("");
+        let device = match device {
+            Ok(device) => devices[device].clone(),
+            Err(_) => String::from("default")
+        };
+        // captures audio from system using cpal
+        match Capture::init(CaptureConfig {
+            device,
+            ..Default::default()
+        }) {
+            Ok(c) => {
+                println!("capturing audio"); // log would create panic
+                capture = Some(c);
+                working_device = true;
+            },
+            Err(e) => {
+                error!("failed to caputure audio: {:#?}", e); // log would create panic
+            }
+        };
+}
+
     
     
  
     // continuous processing of data received from capture
-    let audio = Stream::init_with_capture(&capture, StreamConfig {
+    let audio = Stream::init_with_capture(&capture.unwrap(), StreamConfig {
         gravity: Some(200.0),
         processor: ProcessorConfig {
             frequency_bounds: [30, 15_000],
