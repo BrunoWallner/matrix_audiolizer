@@ -1,0 +1,9 @@
+[package]
+name = "rpi_led_matrix"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+gpio-cdev = "0.5.1"

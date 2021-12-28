@@ -1,0 +1,13 @@
+#!/bin/sh
+
+IP=raspberrypi
+TARGET=armv7-unknown-linux-gnueabihf
+PASSWD=3260Auto
+
+cargo build --release --target $TARGET
+
+# upload binary
+sshpass -p $PASSWD scp -r ./target/$TARGET/release/rpi_led_matrix pi@$IP:/home/pi
+
+# execute binary
+sshpass -p $PASSWD ssh pi@$IP 'echo running && ./rpi_led_matrix'
