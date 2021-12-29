@@ -79,9 +79,9 @@ fn main() {
             Ok(capture) => {
                 println!("capturing audio"); // log would create panic
                 let audio = Stream::init_with_capture(&capture, StreamConfig {
-                    gravity: Some(200.0),
+                    gravity: Some(50.0),
                     processor: ProcessorConfig {
-                        frequency_bounds: [30, 15_000],
+                        frequency_bounds: [30, 20_000],
                         ..Default::default()
                     },
                     ..Default::default()

@@ -74,6 +74,7 @@ impl Matrix {
     }
 
     pub fn draw_grid(&mut self, grid: Grid) -> Result<(), Error> {
+        /*
         for addr_offset in 0..grid.height {
             for addr in 0..grid.width {
                 let addr_with_offset = addr + (addr_offset * grid.width);
@@ -96,6 +97,54 @@ impl Matrix {
                     self.draw_raw(addr_with_offset as u8, bytes)?;
                 }
             } 
+        }
+        */
+        // 8x4 matrices chained like this: =]
+        if grid.width * grid.height <= self.devices as usize {
+            for display in 0..8 {//grid.width * grid.height {
+                // display section of grid
+                let start_y = (display / grid.width) * 8;
+                let end_y = start_y + 8;
+                let mut start_x = (display % grid.width) * 8;
+                let mut end_x = start_x + 8;
+
+                // for weird chaining
+                let first_row = {(display / grid.width) == 1};
+                if first_row {
+                    start_x = (grid.width - ((display % grid.width) + 1) ) * 8;
+                    end_x = start_x + 8;
+                }
+
+                let mut section: [[bool; 8]; 8] = [[false; 8]; 8];
+                for y in start_y..end_y {
+                    let rel_y = y - start_y;
+                    for x in start_x..end_x {
+                        let rel_x = x - start_x;
+                        // with additional rotation in first row because of messed up wiring
+                        if first_row {
+                            section[7 - rel_y][7 - rel_x] = grid.canvas[y][x];
+                        } else {
+                            section[rel_y][rel_x] = grid.canvas[y][x]; 
+                        }
+                    }
+                }
+                
+                let mut bytes: [u8; 8] = [0; 8];
+                for y in 0..8 {
+                    let mut byte: u8 = 0x00;
+                    for x in 0..8 {
+                        // shifts bits to left
+                        byte <<= 1;
+                        // sets first bit to true
+                        if section[y][x] {
+                            byte |= 0b00000001;
+                        }
+                    }
+                    bytes[y] = byte;
+                }
+                self.draw_raw(display as u8, bytes)?;
+                // */
+            }
         }
         Ok(())
     }
