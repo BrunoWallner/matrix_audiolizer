@@ -1,5 +1,6 @@
-#![allow(dead_code)]
+use serde::{Serialize, Deserialize};
 
+#[derive(Serialize, Deserialize)]
 pub struct Grid {
     // how many 8x8 displays not pixels
     pub width: usize,
@@ -14,6 +15,18 @@ impl Grid {
             width,
             height,
             canvas,
+        }
+    }
+    pub fn to_bytes(&self) -> Option<Vec<u8>> {
+        match bincode::serialize(self) {
+            Ok(s) => Some(s),
+            Err(_) => None
+        }
+    }
+    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        match bincode::deserialize(bytes) {
+            Ok(d) => Some(d),
+            Err(_) => None,
         }
     }
 

@@ -1,56 +1,34 @@
 #![allow(unreachable_code)]
 #![allow(dead_code)]
-
-use std::io::prelude::*;
-use std::net::TcpStream;
-
 use audioviz::audio_capture::{config::Config as CaptureConfig, capture::Capture};
-use audioviz::spectrum::stream::{Stream, StreamController};
+use audioviz::spectrum::stream::{Stream as AudioStream, StreamController};
 use audioviz::spectrum::config::{StreamConfig, ProcessorConfig};
 
-use simple_logger::SimpleLogger;
-use log::{info, error};
 use gag::Gag;
-
+use types::grid::Grid;
 use std::{thread::sleep, time::Duration, process::exit};
 
-enum TcpInstruction {
-    Invalid,
-    SendData,
-    SendComplete,
-    CloseConnection,
-}
-impl TcpInstruction {
-    fn to_byte(&self) -> u8 {
-        match self {
-            TcpInstruction::SendData => 0x00,
-            TcpInstruction::SendComplete => 0x01,
-            TcpInstruction::CloseConnection => 0x02,
-            TcpInstruction::Invalid => 0xFF,
-        }
-    }
-}
+mod stream;
+use stream::Stream;
 
 fn main() {
     let _print_gag = Gag::stderr().unwrap(); // to get rid of alsa warnings
-    SimpleLogger::new().init().unwrap();
 
     let ip = input("ip: ");
-    let mut stream = match TcpStream::connect(ip.clone()) {
-        Ok(s) => {
-            info!( "connected to: {}", ip );
+    let mut stream = match Stream::connect(&ip) {
+        Some(s) => {
             s
         },
-        Err(e) => {
-            error!( "could not connect to {}: {}", ip, e );
+        None => {
             exit(1);
         }
     };
+    let matrix_config = stream.get_matrix_configuration().unwrap();
 
     let devices = match Capture::fetch_devices() {
         Ok(d) => d,
         Err(e) => {
-            error!("failed to fetch devices: {:#?}", e);
+            println!("unable to fetch devices: {:?}", e);
             exit(1);
         }
     };
@@ -78,10 +56,12 @@ fn main() {
         }) {
             Ok(capture) => {
                 println!("capturing audio"); // log would create panic
-                let audio = Stream::init_with_capture(&capture, StreamConfig {
+                let audio = AudioStream::init_with_capture(&capture, StreamConfig {
                     gravity: Some(50.0),
+                    fft_resolution: 2048,
                     processor: ProcessorConfig {
-                        frequency_bounds: [30, 20_000],
+                        frequency_bounds: [30, 5_00],
+                        volume: 2.0,
                         ..Default::default()
                     },
                     ..Default::default()
@@ -96,38 +76,26 @@ fn main() {
                     for freq in freqs {
                         data.insert(0, freq.volume as u8)
                     }
-            
-            
-                    let data = vec_to_buffers(&data);
-            
-                    for d in data {
-                        // sends data to server
-                        let instruction = TcpInstruction::SendData;
-                        stream.write_all(&[instruction.to_byte()]).unwrap();
-                        stream.write_all(&d).unwrap();
-                    }
-            
-                    let instruction = TcpInstruction::SendComplete;
-                    stream.write_all(&[instruction.to_byte()]).unwrap();
-            
-                    sleep(Duration::from_millis(16));
+
+                    let mut grid = Grid::new(matrix_config.width as usize, matrix_config.height as usize);
+                    grid.gen_bars(&data);
+
+                    stream.send_grid(&grid).unwrap();
+
+                    sleep(Duration::from_millis(15));
                 }
             
-                // unrachable but would be good to do
-                let instruction = TcpInstruction::CloseConnection;
-                stream.write(&[instruction.to_byte()]).unwrap();
+            
             },
             Err(e) => {
-                error!("failed to caputure audio: {:#?}\n", e); // log would create panic
+                println!("invalid device: {:?}", e);
+                exit(1);
             }
         };
     }
-
-    //let capture = Capture::init(CaptureConfig::default()).unwrap();
-
-    
-    // continuous processing of data received from capture
 }
+
+use std::io::Write;
 
 fn input(print: &str) -> String {
     print!("{}", print);
@@ -139,18 +107,4 @@ fn input(print: &str) -> String {
         .expect("Couldn't read line");
         
     input.trim().to_string()
-}
-
-fn vec_to_buffers(vec: &[u8]) -> Vec<Vec<u8>> {
-    let mut chunk_buffer: Vec<Vec<u8>> = Vec::new();
-    for chunk in vec.chunks(15) {
-        let mut b: Vec<u8> = vec![0; 16];
-        for i in 0..chunk.len() {
-            b[i + 1] = chunk[i];
-        }
-        b[0] = chunk.len() as u8;
-
-        chunk_buffer.push(b);      
-    }
-    chunk_buffer
 }

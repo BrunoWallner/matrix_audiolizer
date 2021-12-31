@@ -6,10 +6,13 @@ use std::sync::mpsc;
 mod matrix;
 use matrix::*;
 
-mod grid;
-use grid::Grid;
+use types::grid::Grid;
 
 mod stream;
+
+/* Number of 8x8 matrices chained together, NOT PIXELS */
+const WIDTH: u8 = 4;
+const HEIGHT: u8 = 2;
 
 // CS Data Clock
 fn get_pins(cs: u32, data: u32, clock: u32) -> Result<(LineHandle, LineHandle, LineHandle), Error> {
@@ -36,26 +39,20 @@ fn main() {
         cs,
         data,
         clock,
-        8,
+        WIDTH * HEIGHT,
     );
 
     let ip = "0.0.0.0:4225";
-    let stream_sender = stream::init(ip).unwrap();
+    let stream_sender = stream::init(ip, (WIDTH, HEIGHT)).unwrap();
     println!("server listening on {}", ip);
 
     matrix.init().unwrap();
-
-    for addr in 0..8 {
-        matrix.set_intensity(addr, 0x01).unwrap();
-    }
 
     loop {
         let (s, r) = mpsc::channel();
         stream_sender.clone().send(stream::StreamEvent::RequestData(s)).unwrap();
         let data = r.recv().unwrap();
-
-        let mut grid = Grid::new(4, 2);
-        grid.gen_bars(&data);
+        let grid = Grid::from_bytes(&data).unwrap_or(Grid::new(WIDTH as usize, HEIGHT as usize));
 
         matrix.draw_grid(grid).unwrap();
   
@@ -64,3 +61,4 @@ fn main() {
 
     //matrix.power_off().unwrap();
 }
+
